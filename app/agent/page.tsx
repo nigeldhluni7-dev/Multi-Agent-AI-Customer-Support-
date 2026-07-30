@@ -21,6 +21,10 @@ function AgentInner() {
   const viewer = useQuery(api.users.viewer);
   const isAgent = viewer?.role === "agent";
   const queue = useQuery(api.tickets.agentQueue, isAgent ? {} : "skip");
+  const openCount = useQuery(
+    api.ticketStats.openTicketCount,
+    isAgent ? {} : "skip",
+  );
   const [selected, setSelected] = useState<Id<"tickets"> | null>(null);
 
   if (viewer === undefined) {
@@ -60,12 +64,21 @@ function AgentInner() {
           }`}
         >
           <div className="h-14 px-4 border-b border-border flex items-center justify-between">
-            <h1 className="font-semibold text-slate-800 dark:text-slate-100">
-              Queue
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-semibold text-slate-800 dark:text-slate-100">
+                Queue
+              </h1>
+              {/* Live, concurrency-correct open-ticket count (deliverable d). */}
+              <span
+                className="inline-flex items-center justify-center min-w-6 h-6 px-2 rounded-full bg-emerald-500 text-white text-xs font-bold tabular-nums"
+                title="Live count of open tickets"
+              >
+                {openCount ?? "…"}
+              </span>
+            </div>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              {queue === undefined ? "…" : `${queue.length} open · live`}
+              live
             </span>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -127,6 +140,7 @@ function AgentInner() {
             <TicketThread
               ticketId={selected}
               onBack={() => setSelected(null)}
+              canManageStatus
             />
           )}
         </section>

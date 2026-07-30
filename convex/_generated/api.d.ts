@@ -15,7 +15,6 @@ import type * as authz from "../authz.js";
 import type * as customerScope from "../customerScope.js";
 import type * as http from "../http.js";
 import type * as orders from "../orders.js";
-import type * as statsTest from "../statsTest.js";
 import type * as ticketStats from "../ticketStats.js";
 import type * as tickets from "../tickets.js";
 import type * as users from "../users.js";
@@ -34,7 +33,6 @@ declare const fullApi: ApiFromModules<{
   customerScope: typeof customerScope;
   http: typeof http;
   orders: typeof orders;
-  statsTest: typeof statsTest;
   ticketStats: typeof ticketStats;
   tickets: typeof tickets;
   users: typeof users;

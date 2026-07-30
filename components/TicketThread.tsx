@@ -16,13 +16,16 @@ function timeLabel(ms: number) {
 export function TicketThread({
   ticketId,
   onBack,
+  canManageStatus = false,
 }: {
   ticketId: Id<"tickets">;
   onBack?: () => void;
+  canManageStatus?: boolean;
 }) {
   const data = useQuery(api.tickets.ticketThread, { ticketId });
   const audit = useQuery(api.audit.ticketAuditLog, { ticketId });
   const postReply = useMutation(api.tickets.postReply);
+  const setStatus = useMutation(api.tickets.setTicketStatus);
   const [reply, setReply] = useState("");
   const [showAudit, setShowAudit] = useState(false);
 
@@ -52,17 +55,37 @@ export function TicketThread({
           </h2>
           <StatusPill status={data.ticket.status} />
         </div>
-        <button
-          type="button"
-          onClick={() => setShowAudit((v) => !v)}
-          className={`shrink-0 text-xs font-medium rounded-lg px-2.5 py-1.5 border transition-colors ${
-            showAudit
-              ? "border-indigo-300 text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:border-indigo-500/40 dark:text-indigo-300"
-              : "border-border text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-          }`}
-        >
-          Audit
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {canManageStatus && data.ticket.status !== "resolved" && (
+            <button
+              type="button"
+              onClick={() => void setStatus({ ticketId, status: "resolved" })}
+              className="text-xs font-medium rounded-lg px-2.5 py-1.5 border border-emerald-300 text-emerald-700 bg-emerald-50 dark:bg-emerald-500/10 dark:border-emerald-500/40 dark:text-emerald-300 hover:bg-emerald-100"
+            >
+              Resolve
+            </button>
+          )}
+          {canManageStatus && data.ticket.status !== "open" && (
+            <button
+              type="button"
+              onClick={() => void setStatus({ ticketId, status: "open" })}
+              className="text-xs font-medium rounded-lg px-2.5 py-1.5 border border-border text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              Reopen
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowAudit((v) => !v)}
+            className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border transition-colors ${
+              showAudit
+                ? "border-indigo-300 text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:border-indigo-500/40 dark:text-indigo-300"
+                : "border-border text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+            }`}
+          >
+            Audit
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 flex min-h-0">
