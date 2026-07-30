@@ -4,7 +4,6 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useState } from "react";
-import Link from "next/link";
 import { AuthGate } from "../../components/AuthGate";
 import { TicketThread } from "../../components/TicketThread";
 import { TopBar, StatusPill } from "../../components/ui";
@@ -18,23 +17,22 @@ export default function CustomerTicketsPage() {
 }
 
 function CustomerInner() {
+  const viewer = useQuery(api.users.viewer);
   const myTickets = useQuery(api.tickets.myTickets);
   const myOrders = useQuery(api.orders.myOrders);
   const [selected, setSelected] = useState<Id<"tickets"> | null>(null);
 
   return (
     <div className="h-screen flex flex-col">
-      <TopBar>
-        <Link
-          href="/"
-          className="text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-        >
-          Home
-        </Link>
-      </TopBar>
+      <TopBar viewer={viewer ?? undefined} />
 
       <div className="flex-1 flex min-h-0">
-        <aside className="w-80 shrink-0 border-r border-border flex flex-col">
+        {/* Sidebar: full width on mobile; hidden once a ticket is opened. */}
+        <aside
+          className={`w-full md:w-80 shrink-0 border-r border-border flex-col ${
+            selected ? "hidden md:flex" : "flex"
+          }`}
+        >
           <NewTicketForm onCreated={setSelected} />
 
           <div className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -80,7 +78,7 @@ function CustomerInner() {
             {myOrders?.map((o) => (
               <div
                 key={o._id}
-                className="flex items-center justify-between text-xs py-1"
+                className="flex items-center justify-between text-xs py-1 gap-2"
               >
                 <span className="text-slate-600 dark:text-slate-300 truncate">
                   <span className="font-mono text-slate-400">{o.reference}</span>{" "}
@@ -92,11 +90,17 @@ function CustomerInner() {
           </div>
         </aside>
 
-        <section className="flex-1 flex flex-col min-w-0">
+        {/* Detail: hidden on mobile until a ticket is selected. */}
+        <section
+          className={`flex-1 flex-col min-w-0 ${selected ? "flex" : "hidden md:flex"}`}
+        >
           {selected === null ? (
             <EmptyState />
           ) : (
-            <TicketThread ticketId={selected} />
+            <TicketThread
+              ticketId={selected}
+              onBack={() => setSelected(null)}
+            />
           )}
         </section>
       </div>

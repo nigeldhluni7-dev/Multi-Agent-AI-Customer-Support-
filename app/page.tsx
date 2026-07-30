@@ -2,11 +2,9 @@
 
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
-import { useAuthActions } from "@convex-dev/auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AuthGate } from "../components/AuthGate";
-import { TopBar, RoleBadge } from "../components/ui";
+import { TopBar } from "../components/ui";
 
 export default function Home() {
   return (
@@ -18,32 +16,11 @@ export default function Home() {
 
 function HomeInner() {
   const viewer = useQuery(api.users.viewer);
-  const { signOut } = useAuthActions();
-  const router = useRouter();
   const isAgent = viewer?.role === "agent";
 
   return (
     <div className="min-h-screen flex flex-col">
-      <TopBar>
-        {viewer && (
-          <div className="hidden sm:flex flex-col items-end leading-tight">
-            <span className="text-xs text-slate-600 dark:text-slate-300">
-              {viewer.email}
-            </span>
-            <RoleBadge role={viewer.role} />
-          </div>
-        )}
-        <button
-          className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-border rounded-lg px-3 py-1.5 transition-colors"
-          onClick={() =>
-            void signOut().then(() => {
-              router.push("/signin");
-            })
-          }
-        >
-          Sign out
-        </button>
-      </TopBar>
+      <TopBar viewer={viewer ?? undefined} />
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-16 flex flex-col gap-12">
         <div className="max-w-2xl">

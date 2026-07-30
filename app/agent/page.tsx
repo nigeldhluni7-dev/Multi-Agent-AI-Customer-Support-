@@ -33,7 +33,7 @@ function AgentInner() {
 
   if (!isAgent) {
     return (
-      <div className="grid place-items-center h-screen">
+      <div className="grid place-items-center h-screen px-6">
         <div className="text-center flex flex-col gap-3 max-w-xs">
           <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 grid place-items-center text-2xl mx-auto">
             🔒
@@ -51,26 +51,21 @@ function AgentInner() {
 
   return (
     <div className="h-screen flex flex-col">
-      <TopBar>
-        <Link
-          href="/"
-          className="text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-        >
-          Home
-        </Link>
-      </TopBar>
+      <TopBar viewer={viewer} />
 
       <div className="flex-1 flex min-h-0">
-        <aside className="w-80 shrink-0 border-r border-border flex flex-col">
+        <aside
+          className={`w-full md:w-80 shrink-0 border-r border-border flex-col ${
+            selected ? "hidden md:flex" : "flex"
+          }`}
+        >
           <div className="h-14 px-4 border-b border-border flex items-center justify-between">
             <h1 className="font-semibold text-slate-800 dark:text-slate-100">
               Queue
             </h1>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              {queue === undefined
-                ? "…"
-                : `${queue.length} open · live`}
+              {queue === undefined ? "…" : `${queue.length} open · live`}
             </span>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -111,7 +106,9 @@ function AgentInner() {
           </div>
         </aside>
 
-        <section className="flex-1 flex flex-col min-w-0">
+        <section
+          className={`flex-1 flex-col min-w-0 ${selected ? "flex" : "hidden md:flex"}`}
+        >
           {selected === null ? (
             <div className="flex-1 grid place-items-center text-center px-6">
               <div className="max-w-xs flex flex-col items-center gap-2">
@@ -127,7 +124,10 @@ function AgentInner() {
               </div>
             </div>
           ) : (
-            <TicketThread ticketId={selected} />
+            <TicketThread
+              ticketId={selected}
+              onBack={() => setSelected(null)}
+            />
           )}
         </section>
       </div>

@@ -9,6 +9,7 @@ export type Viewer = {
   role: Role;
   email: string | null;
   name: string | null;
+  image: string | null;
 };
 
 // Resolve the current identity from the verified session token. Identity is
@@ -30,6 +31,7 @@ export async function getViewer(
     role: profile?.role ?? "customer",
     email: user?.email ?? null,
     name: user?.name ?? null,
+    image: user?.image ?? null,
   };
 }
 
