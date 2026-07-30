@@ -13,6 +13,7 @@ import {
   authorizeTicket,
 } from "./authz";
 import { recordAudit } from "./audit";
+import { onTicketCreated, onTicketStatusChanged } from "./ticketStats";
 
 // ---------------------------------------------------------------------------
 // Agent-facing: the live queue (deliverable a). Restricted to agents (b): a
@@ -154,6 +155,41 @@ export const postAssistantMessage = internalMutation({
 // ---------------------------------------------------------------------------
 // Writes.
 // ---------------------------------------------------------------------------
+// Agents move tickets through the queue. Every status change updates the live
+// open-ticket count in the same transaction, so the count is always correct
+// even with many agents doing this at once.
+export const setTicketStatus = mutation({
+  args: {
+    ticketId: v.id("tickets"),
+    status: v.union(
+      v.literal("open"),
+      v.literal("pending"),
+      v.literal("resolved"),
+      v.literal("closed"),
+    ),
+  },
+  handler: async (ctx, { ticketId, status }) => {
+    const agent = await requireAgent(ctx);
+    const before = await ctx.db.get("tickets", ticketId);
+    if (before === null) throw new Error("Ticket not found");
+    if (before.status === status) return null;
+
+    await ctx.db.patch("tickets", ticketId, { status });
+    const after = await ctx.db.get("tickets", ticketId);
+    if (after) await onTicketStatusChanged(ctx, before, after);
+
+    await recordAudit(ctx, {
+      ticketId,
+      actorType: "agent",
+      actorId: agent.userId,
+      action: "ticket_status_changed",
+      summary: `Agent set status ${before.status} → ${status}`,
+      data: { from: before.status, to: status },
+    });
+    return null;
+  },
+});
+
 export const createTicket = mutation({
   args: { subject: v.string(), body: v.string() },
   handler: async (ctx, args) => {
@@ -183,6 +219,10 @@ export const createTicket = mutation({
       summary: `Opened ticket “${args.subject}”`,
       data: { subject: args.subject, body: args.body },
     });
+
+    // Reflect the new open ticket in the live count — same transaction.
+    const created = await ctx.db.get("tickets", ticketId);
+    if (created) await onTicketCreated(ctx, created);
 
     // Kick off the AI assistant for the opening message.
     if (viewer.role === "customer") {

@@ -80,4 +80,13 @@ export default defineSchema({
     summary: v.string(),
     data: v.optional(v.any()),
   }).index("by_ticket", ["ticketId"]),
+
+  // Sharded counters. A logical count (e.g. "openTickets") is split across many
+  // shard rows; concurrent writers touch different shards, so they rarely
+  // contend. The live count is the sum of a counter's shards.
+  counterShards: defineTable({
+    name: v.string(),
+    shard: v.number(),
+    value: v.number(),
+  }).index("by_name_and_shard", ["name", "shard"]),
 });
