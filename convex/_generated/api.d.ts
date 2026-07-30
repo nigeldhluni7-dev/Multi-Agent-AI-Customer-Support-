@@ -8,9 +8,15 @@
  * @module
  */
 
+import type * as assistant from "../assistant.js";
+import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
+import type * as authz from "../authz.js";
+import type * as customerScope from "../customerScope.js";
 import type * as http from "../http.js";
-import type * as myFunctions from "../myFunctions.js";
+import type * as orders from "../orders.js";
+import type * as tickets from "../tickets.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -19,9 +25,15 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  assistant: typeof assistant;
+  audit: typeof audit;
   auth: typeof auth;
+  authz: typeof authz;
+  customerScope: typeof customerScope;
   http: typeof http;
-  myFunctions: typeof myFunctions;
+  orders: typeof orders;
+  tickets: typeof tickets;
+  users: typeof users;
 }>;
 
 /**

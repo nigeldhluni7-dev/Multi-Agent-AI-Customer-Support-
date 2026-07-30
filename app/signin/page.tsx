@@ -1,8 +1,8 @@
 "use client";
 
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useState } from "react";
-import Image from "next/image";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 export default function SignIn() {
   const { signIn } = useAuthActions();
@@ -10,37 +10,20 @@ export default function SignIn() {
   const [loading, setLoading] = useState(false);
 
   return (
-    <div className="flex flex-col gap-8 w-full max-w-lg mx-auto h-screen justify-center items-center px-4">
-      <div className="text-center flex flex-col items-center gap-4">
-        <div className="flex items-center gap-6">
-          <Image
-            src="/convex.svg"
-            alt="Convex Logo"
-            width={90}
-            height={90}
-          />
-          <div className="w-px h-20 bg-slate-300 dark:bg-slate-600"></div>
-          <Image
-            src="/nextjs-icon-light-background.svg"
-            alt="Next.js Logo"
-            width={90}
-            height={90}
-            className="dark:hidden"
-          />
-          <Image
-            src="/nextjs-icon-dark-background.svg"
-            alt="Next.js Logo"
-            width={90}
-            height={90}
-            className="hidden dark:block"
-          />
+    <div className="flex flex-col gap-8 w-full max-w-md mx-auto h-screen justify-center items-center px-4">
+      <div className="text-center flex flex-col items-center gap-3">
+        <div className="w-14 h-14 rounded-2xl bg-blue-600 grid place-items-center text-white text-2xl font-bold">
+          N
         </div>
         <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-200">
-          Convex + Next.js + Convex Auth
+          Northwind Support
         </h1>
         <p className="text-slate-600 dark:text-slate-400">
-          Sign in with Google to access the demo.
+          Sign in to open tickets or work the support queue.
         </p>
+        <Suspense fallback={null}>
+          <ExpiredNotice />
+        </Suspense>
       </div>
       <div className="flex flex-col gap-4 w-full bg-slate-100 dark:bg-slate-800 p-8 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-600">
         <button
@@ -67,6 +50,19 @@ export default function SignIn() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Shown when AuthGate redirected here because the session expired mid-use.
+function ExpiredNotice() {
+  const reason = useSearchParams().get("reason");
+  if (reason !== "expired") return null;
+  return (
+    <div className="w-full bg-amber-500/10 border border-amber-500/40 rounded-lg p-3">
+      <p className="text-amber-700 dark:text-amber-300 text-sm">
+        Your session expired. Please sign in again to continue.
+      </p>
     </div>
   );
 }
