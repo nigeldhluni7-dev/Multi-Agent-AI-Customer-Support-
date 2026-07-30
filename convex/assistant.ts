@@ -6,10 +6,13 @@ import { internalAction, ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
-// Claude temperature is 0–1. Values like 7.0 are treated as 0.7.
-function temperature(): number {
+// Newer Claude models (the Claude 5 family) manage sampling internally and
+// reject an explicit `temperature`. We only send one for models that still
+// accept it. Claude's temperature is 0–1; a value like 7.0 is read as 0.7.
+function buildTemperature(): number | undefined {
+  if (/(opus|sonnet|fable)-5/i.test(MODEL)) return undefined;
   const raw = Number(process.env.ANTHROPIC_TEMPERATURE ?? "0.7");
   if (!Number.isFinite(raw)) return 0.7;
   if (raw > 1 && raw <= 10) return Math.min(1, raw / 10);
@@ -121,7 +124,7 @@ export const generateReply = internalAction({
       const response = await anthropic.messages.create({
         model: MODEL,
         max_tokens: 1024,
-        temperature: temperature(),
+        temperature: buildTemperature(),
         system: SYSTEM,
         tools: TOOLS,
         messages,
