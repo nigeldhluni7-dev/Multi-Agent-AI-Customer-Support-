@@ -10,56 +10,62 @@ export default function SignIn() {
   const [loading, setLoading] = useState(false);
 
   return (
-    <div className="flex flex-col gap-8 w-full max-w-md mx-auto h-screen justify-center items-center px-4">
-      <div className="text-center flex flex-col items-center gap-3">
-        <div className="w-14 h-14 rounded-2xl bg-blue-600 grid place-items-center text-white text-2xl font-bold">
-          N
+    <div className="min-h-screen grid place-items-center px-4">
+      <div className="w-full max-w-sm flex flex-col gap-8">
+        <div className="text-center flex flex-col items-center gap-3">
+          <span className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white text-2xl font-bold shadow-lg shadow-indigo-500/20">
+            N
+          </span>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+            Northwind Support
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
+            Sign in to open tickets or work the support queue.
+          </p>
+          <Suspense fallback={null}>
+            <ExpiredNotice />
+          </Suspense>
         </div>
-        <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-200">
-          Northwind Support
-        </h1>
-        <p className="text-slate-600 dark:text-slate-400">
-          Sign in to open tickets or work the support queue.
+
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <button
+            className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 font-medium rounded-xl py-3 border border-border transition-all hover:shadow-md active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+            type="button"
+            disabled={loading}
+            onClick={() => {
+              setLoading(true);
+              setError(null);
+              void signIn("google").catch((err: Error) => {
+                setError(err.message);
+                setLoading(false);
+              });
+            }}
+          >
+            <GoogleIcon />
+            {loading ? "Redirecting…" : "Continue with Google"}
+          </button>
+          {error && (
+            <div className="mt-4 bg-rose-500/10 border border-rose-500/30 rounded-lg p-3">
+              <p className="text-rose-600 dark:text-rose-300 text-sm break-words">
+                {error}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <p className="text-center text-xs text-slate-400">
+          Protected by a token-based session · secure sign-in
         </p>
-        <Suspense fallback={null}>
-          <ExpiredNotice />
-        </Suspense>
-      </div>
-      <div className="flex flex-col gap-4 w-full bg-slate-100 dark:bg-slate-800 p-8 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-600">
-        <button
-          className="flex items-center justify-center gap-3 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-950 text-slate-800 dark:text-slate-200 font-semibold rounded-lg py-3 border border-slate-300 dark:border-slate-600 shadow-md hover:shadow-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-          type="button"
-          disabled={loading}
-          onClick={() => {
-            setLoading(true);
-            setError(null);
-            void signIn("google").catch((err: Error) => {
-              setError(err.message);
-              setLoading(false);
-            });
-          }}
-        >
-          <GoogleIcon />
-          {loading ? "Redirecting..." : "Sign in with Google"}
-        </button>
-        {error && (
-          <div className="bg-rose-500/10 border border-rose-500/30 dark:border-rose-500/50 rounded-lg p-4">
-            <p className="text-rose-700 dark:text-rose-300 font-medium text-sm break-words">
-              Error: {error}
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
-// Shown when AuthGate redirected here because the session expired mid-use.
 function ExpiredNotice() {
   const reason = useSearchParams().get("reason");
   if (reason !== "expired") return null;
   return (
-    <div className="w-full bg-amber-500/10 border border-amber-500/40 rounded-lg p-3">
+    <div className="w-full bg-amber-500/10 border border-amber-500/40 rounded-lg p-3 mt-1">
       <p className="text-amber-700 dark:text-amber-300 text-sm">
         Your session expired. Please sign in again to continue.
       </p>

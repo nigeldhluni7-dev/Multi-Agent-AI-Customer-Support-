@@ -6,6 +6,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AuthGate } from "../components/AuthGate";
+import { TopBar, RoleBadge } from "../components/ui";
 
 export default function Home() {
   return (
@@ -23,79 +24,100 @@ function HomeInner() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-md px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-        <span className="text-lg font-bold text-slate-800 dark:text-slate-200">
-          Northwind Support
-        </span>
-        <div className="flex items-center gap-4">
-          {viewer?.email && (
-            <span className="text-sm text-slate-500 hidden sm:inline">
+      <TopBar>
+        {viewer && (
+          <div className="hidden sm:flex flex-col items-end leading-tight">
+            <span className="text-xs text-slate-600 dark:text-slate-300">
               {viewer.email}
-              <span className="ml-2 text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700">
-                {viewer.role}
-              </span>
             </span>
-          )}
-          <button
-            className="bg-slate-600 hover:bg-slate-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-            onClick={() =>
-              void signOut().then(() => {
-                router.push("/signin");
-              })
-            }
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
+            <RoleBadge role={viewer.role} />
+          </div>
+        )}
+        <button
+          className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-border rounded-lg px-3 py-1.5 transition-colors"
+          onClick={() =>
+            void signOut().then(() => {
+              router.push("/signin");
+            })
+          }
+        >
+          Sign out
+        </button>
+      </TopBar>
 
-      <main className="flex-1 max-w-3xl mx-auto w-full px-6 py-12 flex flex-col gap-10">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-200">
-            Welcome{viewer?.name ? `, ${viewer.name}` : ""}
+      <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-16 flex flex-col gap-12">
+        <div className="max-w-2xl">
+          <span className="inline-flex items-center gap-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 rounded-full px-3 py-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+            AI-assisted support · live
+          </span>
+          <h1 className="text-4xl font-bold text-slate-900 dark:text-white mt-4 tracking-tight">
+            Welcome{viewer?.name ? `, ${viewer.name.split(" ")[0]}` : ""}
           </h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-2">
-            Self-serve customer support for Northwind Support Co.
+          <p className="text-slate-600 dark:text-slate-400 mt-3 text-lg">
+            Northwind Support Co. — open a ticket and our AI assistant answers
+            instantly, with a human team a click away.
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-6">
-          <Link
+        <div className="grid sm:grid-cols-2 gap-5">
+          <EntryCard
             href="/tickets"
-            className="group flex flex-col gap-3 rounded-2xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 p-6 hover:border-blue-500 hover:shadow-lg transition-all"
-          >
-            <span className="text-sm font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-              Customer
-            </span>
-            <span className="text-xl font-bold text-slate-800 dark:text-slate-200">
-              My Tickets →
-            </span>
-            <span className="text-sm text-slate-600 dark:text-slate-400">
-              Open a ticket — the AI assistant replies with order tools, and
-              every action is written to the audit trail.
-            </span>
-          </Link>
-
-          {/* Agent workspace is only offered to agents. The server also enforces
-              this — the card's absence is convenience, not the security. */}
-          {isAgent && (
-            <Link
+            accent="indigo"
+            eyebrow="Customer"
+            title="My Tickets"
+            body="Open a ticket, chat with the AI assistant, and track your orders in real time."
+          />
+          {isAgent ? (
+            <EntryCard
               href="/agent"
-              className="group flex flex-col gap-3 rounded-2xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 p-6 hover:border-emerald-500 hover:shadow-lg transition-all"
-            >
-              <span className="text-sm font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-                Agent
-              </span>
-              <span className="text-xl font-bold text-slate-800 dark:text-slate-200">
-                Support Queue →
-              </span>
-              <span className="text-sm text-slate-600 dark:text-slate-400">
-                Watch open tickets arrive live and reply without refreshing.
-              </span>
-            </Link>
+              accent="emerald"
+              eyebrow="Agent"
+              title="Support Queue"
+              body="Watch open tickets arrive live, reply, and reconstruct any case from the audit trail."
+            />
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border p-6 flex flex-col justify-center text-sm text-slate-400">
+              The agent workspace is available to support agents only.
+            </div>
           )}
         </div>
       </main>
     </div>
+  );
+}
+
+function EntryCard({
+  href,
+  accent,
+  eyebrow,
+  title,
+  body,
+}: {
+  href: string;
+  accent: "indigo" | "emerald";
+  eyebrow: string;
+  title: string;
+  body: string;
+}) {
+  const ring =
+    accent === "indigo"
+      ? "hover:border-indigo-400 hover:shadow-indigo-100 dark:hover:shadow-none"
+      : "hover:border-emerald-400 hover:shadow-emerald-100 dark:hover:shadow-none";
+  const dot = accent === "indigo" ? "text-indigo-600 dark:text-indigo-400" : "text-emerald-600 dark:text-emerald-400";
+  return (
+    <Link
+      href={href}
+      className={`group rounded-2xl border border-border bg-card p-6 flex flex-col gap-3 shadow-sm transition-all hover:shadow-lg ${ring}`}
+    >
+      <span className={`text-xs font-semibold uppercase tracking-wide ${dot}`}>
+        {eyebrow}
+      </span>
+      <span className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+        {title}
+        <span className="transition-transform group-hover:translate-x-1">→</span>
+      </span>
+      <span className="text-sm text-slate-600 dark:text-slate-400">{body}</span>
+    </Link>
   );
 }
