@@ -1,122 +1,246 @@
-# Northwind Support: Multi-Agent AI Customer Support
+# Northwind Support — Multi-Agent AI Customer Support & Automation Engine
 
-This project is a Convex + Next.js support system with:
-- customer and agent roles,
-- live support queues,
-- AI assistant responses,
-- order lookup/update tools,
-- and a permanent audit trail for every ticket action.
+A self-serve customer-support platform where an **AI assistant handles first-line
+replies** and a **human agent team supervises escalations**. Built as a
+production-representative MVP: real-time queues, strict per-customer data
+isolation, a permanent audit trail, a structurally-scoped AI assistant, and a
+live open-ticket count that stays correct under concurrent load.
 
-## Stack
+- **Repository:** https://github.com/nigeldhluni7-dev/Multi-Agent-AI-Customer-Support-
+- **Backend deployment (dev):** Convex `kindly-curlew-787`
 
-- `Convex` for database + server functions
-- `Next.js` for web app routing and UI
-- `Convex Auth` with Google OAuth
-- `@anthropic-ai/sdk` for AI assistant responses
-- `@convex-dev/aggregate` for concurrency-safe live ticket counts
+---
 
-## Current Features
+## Tech stack
 
-- **Google sign-in** through Convex Auth.
-- **Role-aware access control** (`customer` vs `agent`) enforced server-side.
-- **Customer ticket flow**: create tickets, post replies, view own tickets.
-- **Agent queue**: see open tickets live, update ticket statuses.
-- **AI assistant**: generates replies and can use tools scoped to the active customer only.
-- **Order tools for AI**: list orders, fetch one order, update order status.
-- **Permanent audit log**: append-only records for ticket and assistant activity.
-- **Live open-ticket count** backed by aggregate component updates in the same mutation transaction.
+| Concern | Choice |
+| --- | --- |
+| Database + server functions | **Convex** (reactive queries, transactional mutations, actions) |
+| Web app / UI | **Next.js 16** (App Router, React 19) + **Tailwind CSS v4** |
+| Authentication | **Convex Auth** with **Google OAuth** (JWT + refresh token) |
+| AI assistant | **`@anthropic-ai/sdk`** — Claude (`claude-sonnet-5`) with tool use |
+| Live open-ticket count | **Sharded counter** (custom, contention-free) |
 
-## Permanent Auditable Record (What Was Implemented)
+---
 
-The backend now records an auditable, append-only trail for each ticket in `auditLog`:
-- `ticket_created`
-- `message_posted`
-- `ticket_status_changed`
-- `assistant_started`
-- `assistant_reply`
-- assistant tool calls such as:
-  - `tool_list_orders`
-  - `tool_get_order`
-  - `tool_set_order_status`
-- system-level safety events (for example missing AI configuration)
+## The five requirements and how each is satisfied
 
-Important behavior:
-- Audit rows are inserted only (no patch/delete path).
-- `ticketAuditLog` returns full chronology for authorized users.
-- Authorization is enforced before audit/ticket thread access.
+### (a) Real-time reply surfacing — "a reply reaches the agent queue with no manual refresh"
 
-## Security + Isolation Design
+Every Convex `useQuery` is a **live subscription**. The agent queue is
+`useQuery(api.tickets.agentQueue)`; the instant a mutation writes a ticket or
+message the query reads, Convex recomputes it server-side and pushes the result
+to every subscribed client. No polling, no websocket code, no refresh.
 
-- Identity is always derived server-side from auth token (never accepted from client args).
-- Customers can access only their own tickets/orders.
-- Agents can access all tickets.
-- Assistant tools operate via customer-scoped helpers and cannot escape tenant boundaries.
-- Agent role assignment is done server-side using `AGENT_EMAILS` allowlist.
+- Backend: [`convex/tickets.ts`](convex/tickets.ts) — `agentQueue`, `ticketThread`
+- UI: [`app/agent/page.tsx`](app/agent/page.tsx), [`components/TicketThread.tsx`](components/TicketThread.tsx)
 
-## AI Assistant Integration
+### (b) Per-identity access boundary — cross-customer access is *structurally impossible*
 
-Assistant action: `convex/assistant.ts`
-- Uses Anthropic SDK in a Convex Node action.
-- Reads:
-  - `ANTHROPIC_API_KEY`
-  - optional `ANTHROPIC_MODEL` (default `claude-sonnet-5`)
-  - optional `ANTHROPIC_TEMPERATURE` (default `0.7`)
-- For Claude 5 family models, temperature is omitted (as required by model behavior).
-- If no API key is set, assistant writes a visible fallback message and audit record.
+- **Roles** live in a `profiles` table, assigned server-side from an
+  `AGENT_EMAILS` allowlist and re-synced on every sign-in — a client can never
+  choose its own role. ([`convex/auth.ts`](convex/auth.ts))
+- **Isolation** is enforced in the Convex functions, not the UI. Every ticket
+  function derives identity from `getAuthUserId(ctx)` and calls
+  `authorizeTicket()`, which **throws** if a customer touches a ticket that
+  isn't theirs — so a direct API call is rejected too, not just a hidden button.
+  ([`convex/authz.ts`](convex/authz.ts))
+- **Token-based session handshake:** Convex Auth issues a **signed JWT** access
+  token (verified statelessly via JWKS on every request — no server-side session
+  lookup) plus a refresh token. Durations are set explicitly: JWT = 1 hour,
+  session = 30-day cap / 7-day idle.
+- **Token expiry mid-session:** the access token silently refreshes via the
+  refresh token; when the session truly ends,
+  [`components/AuthGate.tsx`](components/AuthGate.tsx) detects the unauthenticated
+  state and redirects to `/signin?reason=expired` with a "session expired" notice.
 
-## Authentication Setup (Google + Convex Auth)
+### (c) Permanent, auditable record
 
-Implemented in code:
-- `convex/auth.ts` configured with `Google` provider.
-- Next.js auth provider wiring already active.
-- Sign-in page updated to "Continue with Google".
+An **append-only** `auditLog` table records every ticket and assistant action —
+rows are only ever inserted (no patch/delete path), so a closed case can be
+reconstructed long afterward. Logged events include `ticket_created`,
+`message_posted`, `ticket_status_changed`, `assistant_started`,
+`assistant_reply`, and each tool call (`tool_get_order`,
+`tool_set_order_status`, …). Agents view the full chronology in the ticket's
+**Audit** panel. ([`convex/audit.ts`](convex/audit.ts))
 
-Google Cloud setup required:
-1. Create Google OAuth client (Web app).
-2. Add origin: `http://localhost:3000`
-3. Add callback:
-   - `https://kindly-curlew-787.convex.site/api/auth/callback/google`
-4. Set Convex env vars:
-   - `npx convex env set AUTH_GOOGLE_ID <client_id>`
-   - `npx convex env set AUTH_GOOGLE_SECRET <client_secret>`
+### (d) Scoped assistant actions — the AI cannot act outside the served customer
 
-## Environment Variables
+The assistant reaches order data through **one** per-customer boundary,
+[`convex/customerScope.ts`](convex/customerScope.ts) — the *same* helpers the
+customer-facing UI uses, never a separate more-permissive path. The assistant's
+shape is: **receive** the ticket message → **resolve** it to a single
+customer identity (`ticket.customerId`, server-derived) → **invoke** only the
+permitted, scoped operations (`list_orders`, `get_order`, `set_order_status`).
+The model never supplies a customer id; it is injected server-side, so no prompt
+can make a tool read another customer's data.
 
-### Convex deployment env vars
+> Proven with a two-customer test: customer B could read/modify its own order but
+> **could not** read or modify customer A's order through the boundary — even
+> when calling the helpers directly (no LLM involved).
 
-- `AUTH_GOOGLE_ID`
-- `AUTH_GOOGLE_SECRET`
-- `SITE_URL` (example: `http://localhost:3000`)
-- `AGENT_EMAILS` (comma-separated allowlist for agent role)
-- `ANTHROPIC_API_KEY`
-- `ANTHROPIC_MODEL` (optional)
-- `ANTHROPIC_TEMPERATURE` (optional, default `0.7`)
+### (e) Live, concurrency-correct open-ticket count
 
-### Local app env vars (`.env.local`)
+**Design decision (and why):**
 
-- `CONVEX_DEPLOYMENT`
-- `NEXT_PUBLIC_CONVEX_URL`
-- `NEXT_PUBLIC_CONVEX_SITE_URL`
+- A naive `count()` scan is unbounded and doesn't scale.
+- A single hand-incremented counter document makes **every** ticket write contend
+  on one row — OCC conflicts and lost throughput during a busy queue.
+- `@convex-dev/aggregate` was tried and **removed**: under a 20-writes-at-once
+  burst its internal B-tree nodes contended and mutations failed after exhausting
+  retries — the exact "busy period" failure the requirement warns about.
+- **Chosen: a sharded counter** ([`convex/ticketStats.ts`](convex/ticketStats.ts)).
+  The count is split across 16 shard rows; each `+1/-1` lands on a random shard,
+  so concurrent writers rarely touch the same document. It is updated in the
+  **same transaction** as each ticket write (so it can't drift), and the count is
+  the sum of the shards, exposed as a normal Convex query — hence **live**.
 
-## Run Locally
+> Proven under load: through **20 concurrent opens + 8 concurrent resolves**, the
+> counter matched a ground-truth table scan at every step (33→33, 25→25), with
+> zero errors. The badge on the agent queue updates in real time as agents
+> Resolve/Reopen tickets.
+
+---
+
+## AI assistant usage
+
+- **Where:** [`convex/assistant.ts`](convex/assistant.ts) — a Convex Node action
+  (`generateReply`) triggered when a customer opens a ticket or replies.
+- **Model:** `claude-sonnet-5` (override with `ANTHROPIC_MODEL`).
+- **Temperature:** read from `ANTHROPIC_TEMPERATURE` (default `0.7`). Claude 5
+  models deprecate `temperature`, so it is **omitted for Claude 5** and sent only
+  for older models.
+- **Tools:** `list_orders`, `get_order`, `set_order_status` — each an internal
+  Convex function bound to the served `customerId` via `customerScope.ts`.
+- **Loop:** a bounded (max 6 rounds) tool-use loop; every tool call is written to
+  the audit trail; the final reply is posted into the ticket thread (and appears
+  live in the agent queue).
+- **Resilience:** if `ANTHROPIC_API_KEY` is missing or the call fails, the
+  assistant posts a visible fallback message and records an audit event.
+
+---
+
+## Environment configuration
+
+### Convex deployment env vars (set with `npx convex env set <NAME> <value>`)
+
+| Variable | Purpose |
+| --- | --- |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth client credentials |
+| `JWKS` / `JWT_PRIVATE_KEY` / `SITE_URL` | Session signing/verification (created by the Convex Auth CLI) |
+| `AGENT_EMAILS` | Comma-separated allowlist of emails that become **agents** |
+| `ANTHROPIC_API_KEY` | Claude API key (assistant) |
+| `ANTHROPIC_MODEL` | Optional, default `claude-sonnet-5` |
+| `ANTHROPIC_TEMPERATURE` | Optional, default `0.7` (ignored by Claude 5 models) |
+
+> Secrets live **only** on the Convex deployment — never in `.env.local` or git.
+
+### Local app env vars (`.env.local`, git-ignored)
+
+`CONVEX_DEPLOYMENT`, `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CONVEX_SITE_URL`.
+
+### Google Cloud setup
+
+1. Create an OAuth 2.0 **Web** client.
+2. Authorized origin: `http://localhost:3000`.
+3. Authorized redirect URI:
+   `https://kindly-curlew-787.convex.site/api/auth/callback/google`.
+4. Set `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` on Convex.
+
+---
+
+## Running locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Verification Checklist
+Then, on the Convex deployment: set `AGENT_EMAILS` to the email you'll use as an
+agent, and `ANTHROPIC_API_KEY` to your Claude key. Sign out/in so your role
+re-syncs.
 
-1. Sign in with Google at `/signin`.
-2. Create a customer ticket.
-3. Confirm assistant posts a reply.
-4. Confirm assistant can read/update only that customer's orders.
-5. Open agent queue and confirm live open-ticket count updates.
-6. Change ticket status and verify audit entries are appended.
-7. Open ticket audit timeline and verify complete chronology.
+**Try it:** open `/tickets` (customer) and `/agent` (agent) in two windows →
+open a ticket → the AI replies and it appears live in the queue → Resolve it and
+watch the live count tick down.
 
-## Repository Notes
+---
 
-- `convex/` contains backend schema, auth, tickets, orders, audit, and assistant actions.
-- `app/` and `components/` contain protected frontend views and sign-in UX.
-- This README is the running implementation record and can be extended on each milestone.
+## How correctness was verified
+
+- **Assistant (end-to-end):** ran the real Claude loop — it called `get_order`,
+  replied with the correct order status, and logged `assistant_started →
+  tool_get_order → assistant_reply` to the audit trail.
+- **Scoped boundary:** two-customer test — B cannot read or modify A's order.
+- **Concurrency-correct count:** 20 concurrent opens + 8 concurrent resolves; the
+  sharded counter matched a ground-truth scan at every step.
+- **Types:** `npx tsc --noEmit` passes; Convex functions typecheck on every deploy.
+- **UI:** renders with no console errors; mobile (375px) has no horizontal overflow.
+
+---
+
+## Interface & UX
+
+- Cohesive design system (design tokens, Geist fonts, gradient logo mark).
+- **Google profile picture** + dropdown menu; editable `/profile` page.
+- Fully **responsive**: a master–detail layout — list on mobile, tap to open the
+  thread full-screen with a back button; side-by-side on tablet/desktop.
+- Chat with role avatars and timestamps; a collapsible audit panel.
+
+---
+
+## Project structure
+
+```
+convex/
+  schema.ts          tables: profiles, tickets, messages, orders, auditLog, counterShards
+  auth.ts            Convex Auth (Google), roles, session/JWT config
+  authz.ts           server-side identity + authorization helpers
+  tickets.ts         queues, ticket thread, create/reply, agent status changes
+  customerScope.ts   THE per-customer data boundary (deliverable d)
+  orders.ts          customer orders + assistant order tools
+  assistant.ts       Claude tool-use loop (Node action)
+  audit.ts           append-only audit log + viewer
+  ticketStats.ts     sharded open-ticket counter (concurrency-correct)
+app/
+  page.tsx           home (role-aware entry cards)
+  signin/            Google sign-in + "session expired" notice
+  tickets/           customer view (create, chat, orders)
+  agent/             agent queue + live count + status controls
+  profile/           editable profile (Google avatar)
+components/
+  ui.tsx             logo, avatars, badges, profile menu, top bar
+  TicketThread.tsx   shared conversation + audit panel
+  AuthGate.tsx       session-expiry handling
+proxy.ts             route protection / auth redirects (Next.js middleware)
+```
+
+---
+
+## Development log (build order)
+
+1. **Auth foundation.** Added the Convex Auth Google sign-in page, wired the
+   client/server providers, and confirmed the middleware redirect flow.
+2. **Real-time queue (a).** Modeled `tickets` + `messages`; built the reactive
+   `agentQueue` and a customer/agent split UI so replies surface with no refresh.
+3. **Removed the Convex demo** and replaced it with the Northwind Support product
+   (home, rebranded sign-in, real navigation).
+4. **Identity & isolation (b).** Added `profiles`/roles, the `authz.ts`
+   authorization layer (structural cross-customer rejection), explicit
+   JWT/session durations, and the `AuthGate` for mid-session expiry.
+5. **Audit trail + AI assistant (c).** Added the append-only `auditLog`, the
+   `orders` table, and the Claude tool-use assistant; wired auditing into every
+   ticket and assistant action; added the agent audit panel.
+6. **Scoped assistant boundary (d).** Unified all customer-order access into the
+   single `customerScope.ts` boundary shared by the UI and the assistant; proved
+   isolation with a two-customer test.
+7. **Interface upgrade.** Design system, gradient logo, Google profile picture +
+   editable profile, and full mobile→desktop responsiveness.
+8. **Assistant verification.** Fixed the model id (→ `claude-sonnet-5`) and the
+   Claude-5 `temperature` deprecation; verified the full loop end-to-end.
+9. **Live concurrency-correct count (e).** Tried `@convex-dev/aggregate`, found it
+   contends under bursty concurrent writes, and replaced it with a sharded
+   counter; proved correctness under 20 concurrent opens + 8 resolves; added the
+   live badge and agent Resolve/Reopen controls.
+
+Each milestone was committed separately for a coherent history.
